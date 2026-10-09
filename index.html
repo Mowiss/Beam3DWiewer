@@ -198,6 +198,10 @@ details.grp > summary .tag { font: 10px var(--font-mono); color: var(--faint); t
 .overlay .box p { margin: 6px 0 12px; color: var(--muted); font-size: 12.5px; min-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; border: 1px solid var(--line); }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+.empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 16px; color: var(--muted); }
+.empty svg { width: 56px; height: 56px; opacity: .9; margin-bottom: 4px; }
+.empty b { font: 600 20px var(--font-display); letter-spacing: .08em; text-transform: uppercase; color: var(--fg); }
+.empty .btn { margin-top: 8px; }
 .dropzone { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 14%, transparent); border: 3px dashed var(--accent); pointer-events: none; }
 .dropzone div { background: var(--panel); padding: 16px 22px; border-radius: var(--r); box-shadow: var(--shadow); font: 600 20px var(--font-display); letter-spacing: .06em; text-transform: uppercase; }
 
@@ -280,6 +284,7 @@ details.grp > summary .tag { font: 10px var(--font-mono); color: var(--faint); t
   <main class="view" id="view">
     <canvas id="canvas"></canvas>
     <div class="labels" id="labels"></div>
+    <div class="empty" id="empty"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="4" width="26" height="4.5" rx="1" fill="var(--accent)"/><rect x="13.5" y="8.5" width="5" height="15" fill="var(--faint)"/><rect x="3" y="23.5" width="26" height="4.5" rx="1" fill="var(--accent)"/></svg><b>Aucune maquette ouverte</b><span>Glisser un fichier .ifc ici (IFC2X3, IFC4, IFC4X3)</span><button class="btn primary" id="emptyOpen">Ouvrir un fichier .ifc</button></div>
     <svg class="gizmo" id="gizmo" viewBox="-50 -50 100 100" aria-label="Orientation (axes IFC)"></svg>
     <div class="floats">
     <div class="float" id="sectionPanel" hidden>
@@ -318,143 +323,6 @@ details.grp > summary .tag { font: 10px var(--font-mono); color: var(--faint); t
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/",
   "web-ifc": "https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/web-ifc-api.js"
 } }
-</script>
-
-<script>
-/* EXAMPLE-START */
-// Génère un petit bâtiment métallique (portique) au format IFC4, sans dépendance.
-function buildExampleIFC() {
-  const L = []; let n = 0;
-  const add = s => { n++; L.push('#' + n + '=' + s + ';'); return n; };
-  const R = i => '#' + i;
-  const G64 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
-  const guid = () => { let s = G64[Math.floor(Math.random() * 4)]; for (let i = 0; i < 21; i++) s += G64[Math.floor(Math.random() * 64)]; return "'" + s + "'"; };
-  const S = t => "'" + String(t).replace(/'/g, "''").replace(/[^\x20-\x7E]/g, c => '\\X2\\' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0') + '\\X0\\') + "'";
-  const F = v => { let s = (+v).toFixed(6).replace(/0+$/, ''); return s.endsWith('.') ? s : (s.includes('.') ? s : s + '.'); };
-  const P3 = (x, y, z) => add(`IFCCARTESIANPOINT((${F(x)},${F(y)},${F(z)}))`);
-  const D3 = (x, y, z) => add(`IFCDIRECTION((${F(x)},${F(y)},${F(z)}))`);
-  const norm = v => { const l = Math.hypot(...v); return v.map(c => c / l); };
-  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-
-  const origin = P3(0, 0, 0), zUp = D3(0, 0, 1), xDir = D3(1, 0, 0);
-  const world = add(`IFCAXIS2PLACEMENT3D(${R(origin)},${R(zUp)},${R(xDir)})`);
-  const ctx = add(`IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,${R(world)},$)`);
-  const body = add(`IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,${R(ctx)},$,.MODEL_VIEW.,$)`);
-  const units = [
-    add(`IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)`), add(`IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)`),
-    add(`IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)`), add(`IFCSIUNIT(*,.MASSUNIT.,.KILO.,.GRAM.)`),
-    add(`IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)`)];
-  const ua = add(`IFCUNITASSIGNMENT((${units.map(R).join(',')}))`);
-  const project = add(`IFCPROJECT(${guid()},$,${S('Exemple — Bâtiment de stockage')},${S('Modèle de démonstration généré par BEAM 3D Viewer')},$,$,$,(${R(ctx)}),${R(ua)})`);
-
-  const lp = (rel, ax) => add(`IFCLOCALPLACEMENT(${rel ? R(rel) : '$'},${R(ax || world)})`);
-  const siteLp = lp(null), bldLp = lp(siteLp);
-  const site = add(`IFCSITE(${guid()},$,${S('Parcelle ZA des Fauvins')},$,$,${R(siteLp)},$,$,.ELEMENT.,$,$,$,$,$)`);
-  const bld = add(`IFCBUILDING(${guid()},$,${S('Hangar métallique H1')},$,$,${R(bldLp)},$,${S('Hangar de stockage 24 × 15 m')},.ELEMENT.,$,$,$)`);
-  const storeys = {};
-  const mkStorey = (key, name, elev) => { const p = lp(bldLp); storeys[key] = { lp: p, id: add(`IFCBUILDINGSTOREY(${guid()},$,${S(name)},$,$,${R(p)},$,$,.ELEMENT.,${F(elev)})`), items: [] }; };
-  mkStorey('fnd', 'Fondations', -1.0); mkStorey('rdc', 'RDC', 0); mkStorey('toit', 'Toiture', 6.0);
-  add(`IFCRELAGGREGATES(${guid()},$,$,$,${R(project)},(${R(site)}))`);
-  add(`IFCRELAGGREGATES(${guid()},$,$,$,${R(site)},(${R(bld)}))`);
-  add(`IFCRELAGGREGATES(${guid()},$,$,$,${R(bld)},(${Object.values(storeys).map(s => R(s.id)).join(',')}))`);
-
-  // Styles
-  const style = (name, r, g, b) => { const c = add(`IFCCOLOURRGB($,${F(r)},${F(g)},${F(b)})`); const sh = add(`IFCSURFACESTYLESHADING(${R(c)},0.)`); return add(`IFCSURFACESTYLE(${S(name)},.BOTH.,(${R(sh)}))`); };
-  const stSteel = style('Acier peint RAL 7016', 0.30, 0.36, 0.42);
-  const stGalva = style('Acier galvanisé', 0.70, 0.73, 0.76);
-  const stBrace = style('Acier peint minium', 0.72, 0.30, 0.18);
-  const stConc = style('Béton', 0.74, 0.72, 0.67);
-
-  // Profils
-  const p2 = add(`IFCAXIS2PLACEMENT2D(${R(add('IFCCARTESIANPOINT((0.,0.))'))},$)`);
-  const I = (name, b, h, tw, tf, r) => add(`IFCISHAPEPROFILEDEF(.AREA.,${S(name)},${R(p2)},${F(b)},${F(h)},${F(tw)},${F(tf)},${F(r)},$,$)`);
-  const prof = {
-    HEA300: { id: I('HEA300', 0.300, 0.290, 0.0085, 0.014, 0.027), kgm: 88.3, mat: 'S275' },
-    IPE360: { id: I('IPE360', 0.170, 0.360, 0.008, 0.0127, 0.018), kgm: 57.1, mat: 'S275' },
-    IPE140: { id: I('IPE140', 0.073, 0.140, 0.0047, 0.0069, 0.007), kgm: 12.9, mat: 'S235' },
-    D20: { id: add(`IFCCIRCLEPROFILEDEF(.AREA.,'Rond D20',${R(p2)},0.01)`), kgm: 2.47, mat: 'S235' },
-    SEM: { id: add(`IFCRECTANGLEPROFILEDEF(.AREA.,'Semelle 1200x1200',${R(p2)},1.2,1.2)`), mat: 'C25/30' },
-    DAL: { id: add(`IFCRECTANGLEPROFILEDEF(.AREA.,'Dallage 24000x15000',${R(p2)},24.,15.)`), mat: 'C25/30' },
-  };
-  const mats = {}; const matUse = {};
-  ['S235', 'S275', 'C25/30'].forEach(m => { mats[m] = add(`IFCMATERIAL(${S(m)},$,${S(m.startsWith('C') ? 'Béton' : 'Acier')})`); matUse[m] = []; });
-  const byClass = {}; const qtos = [];
-
-  function member(cls, predef, name, tag, A, B, pk, st, storey) {
-    const d = [B[0] - A[0], B[1] - A[1], B[2] - A[2]]; const len = Math.hypot(...d); const z = norm(d);
-    const x = Math.abs(z[2]) > 0.999 ? [1, 0, 0] : norm(cross([0, 0, 1], z));
-    const ax = add(`IFCAXIS2PLACEMENT3D(${R(P3(...A))},${R(D3(...z))},${R(D3(...x))})`);
-    const place = lp(storeys[storey].lp, ax);
-    const pos = add(`IFCAXIS2PLACEMENT3D(${R(origin)},$,$)`);
-    const solid = add(`IFCEXTRUDEDAREASOLID(${R(prof[pk].id)},${R(pos)},${R(zUp)},${F(len)})`);
-    add(`IFCSTYLEDITEM(${R(solid)},(${R(st)}),$)`);
-    const rep = add(`IFCSHAPEREPRESENTATION(${R(body)},'Body','SweptSolid',(${R(solid)}))`);
-    const pds = add(`IFCPRODUCTDEFINITIONSHAPE($,$,(${R(rep)}))`);
-    const id = add(`${cls}(${guid()},$,${S(name)},$,${S(pk)},${R(place)},${R(pds)},${S(tag)},.${predef}.)`);
-    storeys[storey].items.push(id); (byClass[cls] = byClass[cls] || []).push(id); matUse[prof[pk].mat].push(id);
-    qtos.push({ id, cls, len, pk, tag });
-    return id;
-  }
-
-  // Géométrie du hangar : 4 travées de 6 m (X), portée 15 m (Y), sablière 6 m, faîtage 7,5 m
-  const frames = [0, 6, 12, 18, 24], W = 15, He = 6, Hr = 7.5;
-  frames.forEach((x, i) => {
-    member('IFCFOOTING', 'PAD_FOOTING', 'Semelle isolée', 'S' + (i * 2 + 1), [x, 0, -1.0], [x, 0, -0.2], 'SEM', stConc, 'fnd');
-    member('IFCFOOTING', 'PAD_FOOTING', 'Semelle isolée', 'S' + (i * 2 + 2), [x, W, -1.0], [x, W, -0.2], 'SEM', stConc, 'fnd');
-    member('IFCCOLUMN', 'COLUMN', 'Poteau de portique', 'P' + (i * 2 + 1), [x, 0, 0], [x, 0, He], 'HEA300', stSteel, 'rdc');
-    member('IFCCOLUMN', 'COLUMN', 'Poteau de portique', 'P' + (i * 2 + 2), [x, W, 0], [x, W, He], 'HEA300', stSteel, 'rdc');
-    member('IFCBEAM', 'BEAM', 'Traverse de portique', 'T' + (i * 2 + 1), [x, 0, He], [x, W / 2, Hr], 'IPE360', stSteel, 'toit');
-    member('IFCBEAM', 'BEAM', 'Traverse de portique', 'T' + (i * 2 + 2), [x, W / 2, Hr], [x, W, He], 'IPE360', stSteel, 'toit');
-  });
-  member('IFCSLAB', 'FLOOR', 'Dallage industriel', 'DL1', [12, 7.5, -0.2], [12, 7.5, 0], 'DAL', stConc, 'rdc');
-  let pc = 1;
-  for (let b = 0; b < 4; b++) {
-    for (let k = 0; k <= 5; k++) {
-      [[k / 5 * (W / 2), He + (Hr - He) * k / 5], [W - k / 5 * (W / 2), He + (Hr - He) * k / 5]].forEach(([y, z], s) => {
-        if (k === 5 && s === 1) return; // une seule panne faîtière
-        member('IFCMEMBER', 'PURLIN', k === 5 ? 'Panne faîtière' : 'Panne', 'PN' + (pc++), [frames[b], y, z + 0.26], [frames[b + 1], y, z + 0.26], 'IPE140', stGalva, 'toit');
-      });
-    }
-  }
-  let bc = 1;
-  [[0, 6], [18, 24]].forEach(([x0, x1]) => [0, W].forEach(y => {
-    member('IFCMEMBER', 'BRACE', 'Contreventement de long-pan', 'CV' + (bc++), [x0, y, 0.3], [x1, y, He - 0.3], 'D20', stBrace, 'rdc');
-    member('IFCMEMBER', 'BRACE', 'Contreventement de long-pan', 'CV' + (bc++), [x1, y, 0.3], [x0, y, He - 0.3], 'D20', stBrace, 'rdc');
-  }));
-
-  Object.values(storeys).forEach(s => add(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid()},$,$,$,(${s.items.map(R).join(',')}),${R(s.id)})`));
-  Object.entries(matUse).forEach(([m, ids]) => ids.length && add(`IFCRELASSOCIATESMATERIAL(${guid()},$,$,$,(${ids.map(R).join(',')}),${R(mats[m])})`));
-
-  const sv = (name, v) => add(`IFCPROPERTYSINGLEVALUE(${S(name)},$,${v},$)`);
-  const pset = (name, props, ids) => { const p = add(`IFCPROPERTYSET(${guid()},$,${S(name)},$,(${props.map(R).join(',')}))`); add(`IFCRELDEFINESBYPROPERTIES(${guid()},$,$,$,(${ids.map(R).join(',')}),${R(p)})`); };
-  const common = { IFCCOLUMN: 'Pset_ColumnCommon', IFCBEAM: 'Pset_BeamCommon', IFCMEMBER: 'Pset_MemberCommon', IFCSLAB: 'Pset_SlabCommon', IFCFOOTING: 'Pset_FootingCommon' };
-  Object.entries(byClass).forEach(([cls, ids]) => {
-    const ext = cls === 'IFCCOLUMN' || cls === 'IFCMEMBER';
-    pset(common[cls], [sv('LoadBearing', 'IFCBOOLEAN(.T.)'), sv('IsExternal', `IFCBOOLEAN(.${ext ? 'T' : 'F'}.)`), sv('FireRating', `IFCLABEL(${S(cls === 'IFCFOOTING' || cls === 'IFCSLAB' ? 'R60' : 'R15')})`)], ids);
-  });
-  pset('BEAM_Chantier', [sv('Lot', `IFCLABEL(${S('Lot 02 — Charpente métallique')})`), sv('Phase', "IFCLABEL('EXE')"), sv('Indice', "IFCLABEL('B')")], qtos.filter(q => !q.pk.match(/SEM|DAL/)).map(q => q.id));
-  pset('BEAM_Chantier', [sv('Lot', `IFCLABEL(${S('Lot 01 — Gros œuvre')})`), sv('Phase', "IFCLABEL('EXE')"), sv('Indice', "IFCLABEL('A')")], qtos.filter(q => q.pk.match(/SEM|DAL/)).map(q => q.id));
-
-  qtos.forEach(q => {
-    const qs = [];
-    const ql = (nm, v) => qs.push(add(`IFCQUANTITYLENGTH(${S(nm)},$,$,${F(v)},$)`));
-    const qa = (nm, v) => qs.push(add(`IFCQUANTITYAREA(${S(nm)},$,$,${F(v)},$)`));
-    const qv = (nm, v) => qs.push(add(`IFCQUANTITYVOLUME(${S(nm)},$,$,${F(v)},$)`));
-    const qw = (nm, v) => qs.push(add(`IFCQUANTITYWEIGHT(${S(nm)},$,$,${F(v)},$)`));
-    let qname;
-    if (q.pk === 'SEM') { qname = 'Qto_FootingBaseQuantities'; ql('Length', 1.2); ql('Width', 1.2); ql('Height', 0.8); qv('NetVolume', 1.152); qw('NetWeight', 1.152 * 2500); }
-    else if (q.pk === 'DAL') { qname = 'Qto_SlabBaseQuantities'; ql('Depth', 0.2); qa('NetArea', 360); qv('NetVolume', 72); qw('NetWeight', 72 * 2500); }
-    else { qname = { IFCCOLUMN: 'Qto_ColumnBaseQuantities', IFCBEAM: 'Qto_BeamBaseQuantities', IFCMEMBER: 'Qto_MemberBaseQuantities' }[q.cls]; ql('Length', q.len); qw('NetWeight', q.len * prof[q.pk].kgm); }
-    const eq = add(`IFCELEMENTQUANTITY(${guid()},$,${S(qname)},$,$,(${qs.map(R).join(',')}))`);
-    add(`IFCRELDEFINESBYPROPERTIES(${guid()},$,$,$,(${R(q.id)}),${R(eq)})`);
-  });
-
-  return 'ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION((\'ViewDefinition [DesignTransferView]\'),\'2;1\');\n' +
-    "FILE_NAME('exemple-hangar.ifc','2026-10-09T08:00:00',('BEAM 3D Viewer'),(''),'BEAM 3D Viewer','BEAM 3D Viewer','');\n" +
-    "FILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n" + L.join('\n') + '\nENDSEC;\nEND-ISO-10303-21;\n';
-}
-/* EXAMPLE-END */
-
 </script>
 
 <script type="module">
@@ -1416,6 +1284,7 @@ addEventListener('drop', async e => { e.preventDefault(); dragDepth = 0; if (dz)
 /* Barre d'état, toasts */
 function updateStatus() {
   const n = S.models.size;
+  $('empty').hidden = n > 0; $('gizmo').style.visibility = n ? '' : 'hidden';
   if (!n) { $('stModel').textContent = 'Aucun modèle'; $('stTris').textContent = ''; }
   else {
     const m = [...S.models.values()]; const els = S.elements.size; const vis = pickables.length ? new Set(pickables.map(p => p.userData.el)).size : 0;
@@ -1443,12 +1312,7 @@ function loadPrefs() {
 /* ---------- Démarrage ---------- */
 loadPrefs(); applyTheme(); resize(); renderProps(); renderTree(); renderTypes(); renderModels(); updateStatus();
 requestAnimationFrame(loop);
-(async () => {
-  try {
-    const txt = buildExampleIFC();
-    await loadBuffer(new TextEncoder().encode(txt), 'exemple-hangar.ifc');
-    setView('iso');
-  } catch (e) { console.error(e); loader.hide(); }
-})();
+initIfc().catch(e => console.warn('Moteur IFC indisponible', e)); // préchargement en arrière-plan
+$('emptyOpen').onclick = () => $('file').click();
 window.BEAM = { S, select, fitAll, setView, setTool, loadBuffer };
 </script>
